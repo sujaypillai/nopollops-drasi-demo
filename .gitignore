@@ -1,0 +1,16 @@
+.DS_Store
+node_modules/
+dist/
+build/
+.env
+.env.*
+!.env.example
+coverage/
+*.log
+.terraform/
+*.tfstate
+*.tfstate.*
+kubeconfig*
+secrets.yaml
+*.local.yaml
+

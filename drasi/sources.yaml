@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Source
+name: nopollops-postgres
+spec:
+  kind: PostgreSQL
+  properties:
+    host: ${POSTGRES_HOST}
+    port: 5432
+    user: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+    database: nopollops
+    ssl: true
+    tables:
+      - public.participants
+      - public.app_submissions
+      - public.risky_images
+      - public.remediation_votes
+---
+apiVersion: v1
+kind: Source
+name: nopollops-kubernetes
+spec:
+  kind: Kubernetes
+  properties:
+    kubeConfigSecret: k8s-context
+    namespaces:
+      - nopollops-demo
+

@@ -1,0 +1,20 @@
+{
+  "name": "nopollops-drasi-demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Audience interaction demo for Drasi continuous queries on AKS",
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @nopollops/api & npm run dev --workspace @nopollops/web",
+    "build": "npm run build --workspace @nopollops/api && npm run build --workspace @nopollops/web",
+    "lint": "npm run lint --workspace @nopollops/api && npm run lint --workspace @nopollops/web",
+    "typecheck": "npm run typecheck --workspace @nopollops/api && npm run typecheck --workspace @nopollops/web"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
+

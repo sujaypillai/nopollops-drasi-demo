@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ContinuousQuery
+name: risky-running-workloads
+spec:
+  mode: query
+  sources:
+    subscriptions:
+      - id: nopollops-postgres
+        nodes:
+          - sourceLabel: app_submissions
+          - sourceLabel: risky_images
+      - id: nopollops-kubernetes
+        nodes:
+          - sourceLabel: Pod
+  query: >
+    MATCH
+      (submission:app_submissions),
+      (risk:risky_images {active: true}),
+      (pod:Pod)
+    WHERE submission.image = risk.image
+      AND pod.metadata.namespace = submission.namespace
+    RETURN
+      submission.app_name AS appName,
+      submission.team_name AS teamName,
+      submission.image AS image,
+      pod.metadata.name AS podName,
+      pod.metadata.namespace AS namespace,
+      risk.severity AS severity,
+      risk.reason AS reason,
+      risk.mitigation AS mitigation
+

@@ -1,0 +1,35 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nopollops
+  namespace: nopollops-system
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+spec:
+  ingressClassName: webapprouting.kubernetes.azure.com
+  rules:
+    - host: REPLACE_HOST
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: nopollops-api
+                port:
+                  number: 8080
+          - path: /events
+            pathType: Prefix
+            backend:
+              service:
+                name: nopollops-api
+                port:
+                  number: 8080
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nopollops-web
+                port:
+                  number: 80
+

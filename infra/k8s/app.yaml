@@ -1,0 +1,108 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nopollops-config
+  namespace: nopollops-system
+type: Opaque
+stringData:
+  DATABASE_URL: "postgres://replace-me"
+  OPERATOR_KEY: "replace-me"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nopollops-api
+  namespace: nopollops-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nopollops-api
+  template:
+    metadata:
+      labels:
+        app: nopollops-api
+    spec:
+      serviceAccountName: nopollops-api
+      containers:
+        - name: api
+          image: REPLACE_ACR.azurecr.io/nopollops-api:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: nopollops-config
+                  key: DATABASE_URL
+            - name: OPERATOR_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: nopollops-config
+                  key: OPERATOR_KEY
+            - name: DEMO_NAMESPACE
+              value: nopollops-demo
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nopollops-api
+  namespace: nopollops-system
+spec:
+  selector:
+    app: nopollops-api
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nopollops-web
+  namespace: nopollops-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nopollops-web
+  template:
+    metadata:
+      labels:
+        app: nopollops-web
+    spec:
+      containers:
+        - name: web
+          image: REPLACE_ACR.azurecr.io/nopollops-web:latest
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nopollops-web
+  namespace: nopollops-system
+spec:
+  selector:
+    app: nopollops-web
+  ports:
+    - port: 80
+      targetPort: 80
+

@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ContinuousQuery
+name: affected-teams
+spec:
+  mode: query
+  sources:
+    subscriptions:
+      - id: nopollops-postgres
+        nodes:
+          - sourceLabel: app_submissions
+          - sourceLabel: risky_images
+  query: >
+    MATCH
+      (submission:app_submissions),
+      (risk:risky_images {active: true})
+    WHERE submission.image = risk.image
+    RETURN
+      submission.team_name AS teamName,
+      count(submission.id) AS riskyWorkloadCount,
+      collect(submission.app_name) AS apps
+
