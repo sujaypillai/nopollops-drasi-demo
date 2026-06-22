@@ -291,6 +291,24 @@ select {
   line-height: 0.9;
 }
 
+.query-strip {
+  align-items: center;
+  background: var(--night);
+  border-radius: 22px;
+  color: var(--paper);
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+  overflow-x: auto;
+  padding: 16px 18px;
+}
+
+.query-strip span {
+  color: var(--lime);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .dashboard-grid {
   display: grid;
   gap: 18px;
@@ -310,7 +328,8 @@ select {
 
 .incident,
 .row,
-.reaction {
+.reaction,
+.team-card {
   background: rgba(255, 255, 255, 0.48);
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -329,6 +348,24 @@ code {
   color: var(--signal);
   font-style: normal;
   font-weight: 700;
+}
+
+.team-card {
+  grid-template-columns: 1fr auto;
+}
+
+.team-card em {
+  color: var(--signal);
+  font-style: normal;
+  font-weight: 700;
+}
+
+.empty {
+  border: 1px dashed rgba(16, 19, 15, 0.28);
+  border-radius: 18px;
+  color: rgba(16, 19, 15, 0.62);
+  margin: 0;
+  padding: 18px;
 }
 
 .bar {
@@ -375,4 +412,3 @@ code {
     flex-wrap: wrap;
   }
 }
-

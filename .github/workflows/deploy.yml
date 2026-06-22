@@ -1,0 +1,49 @@
+name: Deploy to AKS
+
+on:
+  workflow_dispatch:
+    inputs:
+      resource_group:
+        description: Azure resource group
+        required: true
+      aks_name:
+        description: AKS cluster name
+        required: true
+      acr_name:
+        description: Azure Container Registry name
+        required: true
+      app_host:
+        description: Public app host for ingress
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - uses: azure/setup-kubectl@v4
+      - run: az acr login --name "${{ inputs.acr_name }}"
+      - run: |
+          docker build -f apps/api/Dockerfile -t "${{ inputs.acr_name }}.azurecr.io/nopollops-api:${{ github.sha }}" .
+          docker build -f apps/web/Dockerfile -t "${{ inputs.acr_name }}.azurecr.io/nopollops-web:${{ github.sha }}" .
+          docker push "${{ inputs.acr_name }}.azurecr.io/nopollops-api:${{ github.sha }}"
+          docker push "${{ inputs.acr_name }}.azurecr.io/nopollops-web:${{ github.sha }}"
+      - run: az aks get-credentials -g "${{ inputs.resource_group }}" -n "${{ inputs.aks_name }}" --overwrite-existing
+      - run: |
+          kubectl apply -f infra/k8s/namespace.yaml
+          kubectl apply -f infra/k8s/api-rbac.yaml
+          sed \
+            -e "s#REPLACE_ACR.azurecr.io/nopollops-api:latest#${{ inputs.acr_name }}.azurecr.io/nopollops-api:${{ github.sha }}#g" \
+            -e "s#REPLACE_ACR.azurecr.io/nopollops-web:latest#${{ inputs.acr_name }}.azurecr.io/nopollops-web:${{ github.sha }}#g" \
+            infra/k8s/app.yaml | kubectl apply -f -
+          sed "s#REPLACE_HOST#${{ inputs.app_host }}#g" infra/k8s/ingress.yaml | kubectl apply -f -
+

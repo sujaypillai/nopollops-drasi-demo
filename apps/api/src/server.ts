@@ -5,11 +5,12 @@ import { z } from "zod";
 import { config } from "./config.js";
 import { addClient } from "./events.js";
 import { getDashboardState, publishDashboard, query } from "./db.js";
-import { createDemoDeployment } from "./kubernetes.js";
+import { createDemoDeployment, deleteDemoDeployment, patchDemoDeploymentImage } from "./kubernetes.js";
 
 const app = express();
 
 const teams = ["Team Satay", "Team Nasi Lemak", "Team Roti Canai", "Team Teh Tarik", "Team Durian", "Team Laksa"];
+const demoNames = ["satay-api", "laksa-ledger", "durian-gateway", "teh-tarik-worker", "roti-router", "rendang-risk"];
 
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
@@ -74,13 +75,13 @@ app.post("/api/submissions", async (request, response, next) => {
     const shouldCreate = Number(count) < config.maxRealDeployments;
     const deployment = shouldCreate
       ? await createDemoDeployment({ appName: body.appName, image: body.image, teamName: participant.teamName })
-      : { mode: "simulated" as const };
+      : { mode: "simulated" as const, name: body.appName.toLowerCase().replace(/[^a-z0-9-]/g, "-").slice(0, 48) };
 
     const status = deployment.mode;
     await query(
-      `insert into app_submissions (id, participant_id, team_name, app_name, namespace, image, image_tag, status)
-       values ($1, $2, $3, $4, $5, $6, split_part($6, ':', 2), $7)`,
-      [randomUUID(), body.participantId, participant.teamName, body.appName, config.demoNamespace, body.image, status]
+      `insert into app_submissions (id, participant_id, team_name, app_name, namespace, deployment_name, image, image_tag, status)
+       values ($1, $2, $3, $4, $5, $6, $7, split_part($7, ':', 2), $8)`,
+      [randomUUID(), body.participantId, participant.teamName, body.appName, config.demoNamespace, deployment.name, body.image, status]
     );
     await publishDashboard();
     response.status(201).json({ appName: body.appName, status });
@@ -163,6 +164,111 @@ app.post("/api/operator/risky-images", async (request, response, next) => {
   }
 });
 
+app.post("/api/operator/risky-images/resolve", async (request, response, next) => {
+  try {
+    requireOperator(request.headers["x-operator-key"]);
+    const body = z.object({
+      image: z.string().trim().min(1).max(240)
+    }).parse(request.body);
+
+    await query(
+      `update risky_images
+       set active = false,
+           resolved_at = now()
+       where image = $1`,
+      [body.image]
+    );
+    await publishDashboard();
+    response.status(202).json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/operator/remediate", async (request, response, next) => {
+  try {
+    requireOperator(request.headers["x-operator-key"]);
+    const body = z.object({
+      action: z.enum(["upgrade", "quarantine", "delete"]),
+      image: z.string().trim().min(1).max(240),
+      replacementImage: z.string().trim().min(1).max(240).optional()
+    }).parse(request.body);
+
+    const submissions = await query<{ id: string; deploymentName: string | null }>(
+      `select id::text, deployment_name as "deploymentName"
+       from app_submissions
+       where image = $1`,
+      [body.image]
+    );
+
+    for (const submission of submissions) {
+      if (!submission.deploymentName) continue;
+      if (body.action === "upgrade") {
+        const replacement = body.replacementImage ?? body.image.replace(/:(legacy|vulnerable|latest)$/i, ":patched");
+        await patchDemoDeploymentImage({ deploymentName: submission.deploymentName, image: replacement });
+        await query("update app_submissions set image = $1, image_tag = split_part($1, ':', 2), status = 'remediated' where id = $2", [
+          replacement,
+          submission.id
+        ]);
+      }
+      if (body.action === "quarantine") {
+        await query("update app_submissions set status = 'quarantined' where id = $1", [submission.id]);
+      }
+      if (body.action === "delete") {
+        await deleteDemoDeployment({ deploymentName: submission.deploymentName });
+        await query("update app_submissions set status = 'deleted' where id = $1", [submission.id]);
+      }
+    }
+
+    await query(
+      `insert into reaction_events (id, query_name, change_type, summary, payload)
+       values ($1, 'operator-remediation', $2, $3, $4::jsonb)`,
+      [
+        randomUUID(),
+        body.action,
+        `Operator applied ${body.action} to ${submissions.length} matching workload(s)`,
+        JSON.stringify(body)
+      ]
+    );
+    await publishDashboard();
+    response.status(202).json({ remediated: submissions.length });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/operator/seed", async (request, response, next) => {
+  try {
+    requireOperator(request.headers["x-operator-key"]);
+    const body = z.object({
+      count: z.number().int().min(1).max(60)
+    }).default({ count: 12 }).parse(request.body ?? undefined);
+
+    for (let index = 0; index < body.count; index += 1) {
+      const participantId = randomUUID();
+      const teamName = teams[index % teams.length];
+      const appName = `${demoNames[index % demoNames.length]}-${index + 1}`;
+      const image = index % 4 === 0 ? "ghcr.io/nopollops/payment-api:legacy" : "ghcr.io/nopollops/frontend:stable";
+      const deployment = await createDemoDeployment({ appName, image, teamName });
+      await query("insert into participants (id, display_name, team_name) values ($1, $2, $3)", [
+        participantId,
+        `Demo guest ${index + 1}`,
+        teamName
+      ]);
+      await query(
+        `insert into app_submissions (id, participant_id, team_name, app_name, namespace, deployment_name, image, image_tag, status)
+         values ($1, $2, $3, $4, $5, $6, $7, split_part($7, ':', 2), $8)`,
+        [randomUUID(), participantId, teamName, appName, config.demoNamespace, deployment.name, image, deployment.mode]
+      );
+    }
+
+    await publishDashboard();
+    response.status(201).json({ seeded: body.count });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post("/api/operator/reset", async (request, response, next) => {
   try {
     requireOperator(request.headers["x-operator-key"]);
@@ -188,4 +294,3 @@ function requireOperator(value: string | string[] | undefined) {
 app.listen(config.port, () => {
   console.log(`NoPollOps API listening on ${config.port}`);
 });
-

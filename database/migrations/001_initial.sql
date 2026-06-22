@@ -13,6 +13,7 @@ create table if not exists app_submissions (
   team_name text not null,
   app_name text not null,
   namespace text not null,
+  deployment_name text,
   image text not null,
   image_tag text,
   desired_replicas integer not null default 1,
@@ -50,6 +51,6 @@ create table if not exists reaction_events (
 );
 
 create index if not exists idx_app_submissions_image on app_submissions(image);
+create index if not exists idx_app_submissions_status on app_submissions(status);
 create index if not exists idx_risky_images_active_image on risky_images(active, image);
 create index if not exists idx_votes_incident on remediation_votes(incident_key);
-

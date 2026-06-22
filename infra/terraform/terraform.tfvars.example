@@ -1,0 +1,7 @@
+location                = "southeastasia"
+resource_group_name     = "rg-nopollops-drasi-demo"
+name_prefix             = "nopollops"
+postgres_admin_login    = "nopollopsadmin"
+postgres_admin_password = "replace-with-generated-password"
+authorized_ip_ranges    = []
+

@@ -1,4 +1,4 @@
-import k8s from "@kubernetes/client-node";
+import * as k8s from "@kubernetes/client-node";
 import { config } from "./config.js";
 
 const kc = new k8s.KubeConfig();
@@ -21,7 +21,7 @@ export function deploymentName(appName: string) {
 
 export async function createDemoDeployment(input: { appName: string; image: string; teamName: string }) {
   if (!config.kubernetesEnabled || !kc.getCurrentCluster()) {
-    return { mode: "simulated" as const };
+    return { mode: "simulated" as const, name: deploymentName(input.appName) };
   }
 
   const name = deploymentName(input.appName);
@@ -72,4 +72,37 @@ export async function createDemoDeployment(input: { appName: string; image: stri
   });
 
   return { mode: "kubernetes" as const, name };
+}
+
+export async function patchDemoDeploymentImage(input: { deploymentName: string; image: string }) {
+  if (!config.kubernetesEnabled || !kc.getCurrentCluster()) {
+    return { mode: "simulated" as const };
+  }
+
+  await appsApi.patchNamespacedDeployment({
+    name: input.deploymentName,
+    namespace: config.demoNamespace,
+    body: [
+      {
+        op: "replace",
+        path: "/spec/template/spec/containers/0/image",
+        value: input.image
+      }
+    ]
+  });
+
+  return { mode: "kubernetes" as const };
+}
+
+export async function deleteDemoDeployment(input: { deploymentName: string }) {
+  if (!config.kubernetesEnabled || !kc.getCurrentCluster()) {
+    return { mode: "simulated" as const };
+  }
+
+  await appsApi.deleteNamespacedDeployment({
+    name: input.deploymentName,
+    namespace: config.demoNamespace
+  });
+
+  return { mode: "kubernetes" as const };
 }

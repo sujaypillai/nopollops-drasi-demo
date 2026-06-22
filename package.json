@@ -11,10 +11,11 @@
     "dev": "npm run dev --workspace @nopollops/api & npm run dev --workspace @nopollops/web",
     "build": "npm run build --workspace @nopollops/api && npm run build --workspace @nopollops/web",
     "lint": "npm run lint --workspace @nopollops/api && npm run lint --workspace @nopollops/web",
-    "typecheck": "npm run typecheck --workspace @nopollops/api && npm run typecheck --workspace @nopollops/web"
+    "typecheck": "npm run typecheck --workspace @nopollops/api && npm run typecheck --workspace @nopollops/web",
+    "db:migrate": "npm run db:migrate --workspace @nopollops/api",
+    "db:seed": "npm run db:seed --workspace @nopollops/api"
   },
   "engines": {
     "node": ">=20"
   }
 }
-

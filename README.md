@@ -29,13 +29,16 @@ scripts/    Setup, deploy, reset, and preflight scripts
 
 ## Current status
 
-This repo starts with the runnable application skeleton and deployment assets. The first implementation slice includes:
+The repo includes a full first implementation of the demo:
 
 - React frontend for audience, dashboard, and operator flows.
-- Node.js API contract for participants, submissions, risk catalog, votes, reactions, and live events.
+- Node.js API for participants, submissions, risk catalog, votes, remediations, reactions, seeding, and live events.
 - PostgreSQL schema and seed data.
 - Kubernetes manifests for app deployment on AKS.
 - Drasi manifests for PostgreSQL source, Kubernetes source, risky workload query, affected teams query, and HTTP reaction.
+- Terraform for AKS Standard, ACR, PostgreSQL Flexible Server, and Log Analytics.
+- GitHub Actions for build and AKS deployment.
+- Demo runbook, speaker script, troubleshooting notes, and deployment scripts.
 
 ## Prerequisites
 
@@ -50,10 +53,18 @@ This repo starts with the runnable application skeleton and deployment assets. T
 
 ```bash
 npm install
+npm run db:migrate
+npm run db:seed
 npm run dev
 ```
 
 The API expects PostgreSQL configuration from environment variables. Copy `.env.example` and adjust values for your local or Azure database.
+
+For local PostgreSQL:
+
+```bash
+docker compose up -d postgres
+```
 
 ## Azure deployment
 
@@ -67,5 +78,16 @@ The intended Azure target is AKS Standard with:
 - Log Analytics / Container Insights
 - Drasi installed into `drasi-system`
 
-Deployment scripts and infrastructure definitions will be expanded as the implementation progresses.
+High-level deployment flow:
 
+```bash
+scripts/setup-azure.sh
+scripts/deploy-infra.sh
+az aks get-credentials -g <resource-group> -n <aks-name>
+scripts/build-push.sh
+scripts/deploy-app.sh
+scripts/install-drasi.sh
+scripts/apply-drasi.sh
+```
+
+See `docs/demo-runbook.md` for the live conference flow.

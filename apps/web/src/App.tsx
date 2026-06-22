@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 
 type Participant = {
   id: string;
@@ -8,8 +8,10 @@ type Participant = {
 
 type DashboardState = {
   participants: number;
-  submissions: Array<{ appName: string; teamName: string; image: string; status: string }>;
-  riskyWorkloads: Array<{ appName: string; teamName: string; image: string; severity: string; mitigation: string }>;
+  submissions: Array<{ appName: string; teamName: string; image: string; status: string; createdAt: string }>;
+  riskyWorkloads: Array<{ appName: string; teamName: string; image: string; severity: string; reason: string; mitigation: string }>;
+  affectedTeams: Array<{ teamName: string; riskyWorkloadCount: number; highestSeverity: string }>;
+  activeRisks: Array<{ image: string; severity: string; reason: string; mitigation: string }>;
   votes: Record<string, number>;
   reactions: Array<{ id: string; changeType: string; queryName: string; summary: string; createdAt: string }>;
 };
@@ -28,6 +30,8 @@ const emptyDashboard: DashboardState = {
   participants: 0,
   submissions: [],
   riskyWorkloads: [],
+  affectedTeams: [],
+  activeRisks: [],
   votes: {},
   reactions: []
 };
@@ -229,6 +233,8 @@ function VotePage({ participant }: { participant: Participant | null }) {
 }
 
 function DashboardPage({ state }: { state: DashboardState }) {
+  const totalVotes = Object.values(state.votes).reduce((sum, count) => sum + count, 0);
+
   return (
     <section className="dashboard">
       <header className="dashboard-hero">
@@ -240,20 +246,28 @@ function DashboardPage({ state }: { state: DashboardState }) {
           <Metric label="Participants" value={state.participants} />
           <Metric label="Apps" value={state.submissions.length} />
           <Metric label="Risky" value={state.riskyWorkloads.length} />
+          <Metric label="Votes" value={totalVotes} />
         </div>
       </header>
+      <div className="query-strip">
+        <span>Continuous query:</span>
+        <code>MATCH running pods + app submissions + active risky images RETURN affected workloads</code>
+      </div>
       <div className="dashboard-grid">
         <Board title="Risky workloads">
+          {state.riskyWorkloads.length === 0 && <EmptyState text="No risky workloads detected. Create change to wake up the room." />}
           {state.riskyWorkloads.map((item) => (
             <article className="incident" key={`${item.appName}-${item.image}`}>
               <strong>{item.appName}</strong>
               <span>{item.teamName}</span>
               <code>{item.image}</code>
               <em>{item.severity}</em>
+              <small>{item.mitigation}</small>
             </article>
           ))}
         </Board>
         <Board title="Audience deployments">
+          {state.submissions.length === 0 && <EmptyState text="Waiting for audience deployments." />}
           {state.submissions.slice(0, 8).map((item) => (
             <article className="row" key={`${item.teamName}-${item.appName}`}>
               <span>{item.appName}</span>
@@ -262,7 +276,18 @@ function DashboardPage({ state }: { state: DashboardState }) {
             </article>
           ))}
         </Board>
+        <Board title="Affected teams">
+          {state.affectedTeams.length === 0 && <EmptyState text="No team blast radius yet." />}
+          {state.affectedTeams.map((team) => (
+            <article className="team-card" key={team.teamName}>
+              <strong>{team.teamName}</strong>
+              <span>{team.riskyWorkloadCount} risky workload(s)</span>
+              <em>{team.highestSeverity}</em>
+            </article>
+          ))}
+        </Board>
         <Board title="Remediation vote">
+          {Object.keys(state.votes).length === 0 && <EmptyState text="Audience votes appear here." />}
           {Object.entries(state.votes).map(([vote, count]) => (
             <div className="bar" key={vote}>
               <span>{vote}</span>
@@ -272,11 +297,22 @@ function DashboardPage({ state }: { state: DashboardState }) {
           ))}
         </Board>
         <Board title="Drasi reaction feed">
+          {state.reactions.length === 0 && <EmptyState text="Reaction events from Drasi or the operator appear here." />}
           {state.reactions.slice(0, 8).map((event) => (
             <article className="reaction" key={event.id}>
               <span>{event.changeType}</span>
               <strong>{event.queryName}</strong>
               <p>{event.summary}</p>
+            </article>
+          ))}
+        </Board>
+        <Board title="Active risk catalog">
+          {state.activeRisks.length === 0 && <EmptyState text="No active risky images." />}
+          {state.activeRisks.map((risk) => (
+            <article className="row" key={risk.image}>
+              <span>{risk.severity}</span>
+              <code>{risk.image}</code>
+              <small>{risk.reason}</small>
             </article>
           ))}
         </Board>
@@ -288,20 +324,54 @@ function DashboardPage({ state }: { state: DashboardState }) {
 function OperatorPage() {
   const [operatorKey, setOperatorKey] = useState("");
   const [image, setImage] = useState("ghcr.io/nopollops/payment-api:legacy");
+  const [replacementImage, setReplacementImage] = useState("ghcr.io/nopollops/payment-api:v2");
   const [message, setMessage] = useState<string | null>(null);
 
-  async function markRisky() {
-    const response = await fetch("/api/operator/risky-images", {
+  async function operatorPost(path: string, body?: unknown) {
+    const response = await fetch(path, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-operator-key": operatorKey },
-      body: JSON.stringify({
-        image,
-        severity: "High",
-        reason: "Conference demo CVE signal",
-        mitigation: "Upgrade to a patched image tag"
-      })
+      body: JSON.stringify(body)
+    });
+    return response;
+  }
+
+  async function markRisky() {
+    const response = await operatorPost("/api/operator/risky-images", {
+      image,
+      severity: "High",
+      reason: "Conference demo CVE signal",
+      mitigation: "Upgrade to a patched image tag"
     });
     setMessage(response.ok ? "Risk signal published" : "Operator request failed");
+  }
+
+  async function resolveRisk() {
+    const response = await fetch("/api/operator/risky-images/resolve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-operator-key": operatorKey },
+      body: JSON.stringify({ image })
+    });
+    setMessage(response.ok ? "Risk signal resolved" : "Resolve request failed");
+  }
+
+  async function remediate(action: "upgrade" | "quarantine" | "delete") {
+    const response = await fetch("/api/operator/remediate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-operator-key": operatorKey },
+      body: JSON.stringify({ action, image, replacementImage })
+    });
+    const result = await response.json().catch(() => ({}));
+    setMessage(response.ok ? `${result.remediated ?? 0} workload(s) remediated` : "Remediation failed");
+  }
+
+  async function seed() {
+    const response = await fetch("/api/operator/seed", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-operator-key": operatorKey },
+      body: JSON.stringify({ count: 18 })
+    });
+    setMessage(response.ok ? "Seed participants created" : "Seed failed");
   }
 
   async function resetDemo() {
@@ -321,7 +391,14 @@ function OperatorPage() {
         <input id="operatorKey" type="password" value={operatorKey} onChange={(event) => setOperatorKey(event.target.value)} />
         <label htmlFor="riskImage">Risky image</label>
         <input id="riskImage" value={image} onChange={(event) => setImage(event.target.value)} />
+        <label htmlFor="replacementImage">Replacement image</label>
+        <input id="replacementImage" value={replacementImage} onChange={(event) => setReplacementImage(event.target.value)} />
         <button className="primary" onClick={markRisky}>Mark image risky</button>
+        <button className="secondary" onClick={resolveRisk}>Resolve risk signal</button>
+        <button className="primary" onClick={() => remediate("upgrade")}>Apply upgrade</button>
+        <button className="secondary" onClick={() => remediate("quarantine")}>Quarantine matching apps</button>
+        <button className="secondary" onClick={() => remediate("delete")}>Delete matching apps</button>
+        <button className="primary" onClick={seed}>Seed backup audience</button>
         <button className="secondary" onClick={resetDemo}>Reset demo</button>
       </div>
       {message && <p className="success">{message}</p>}
@@ -338,7 +415,7 @@ function Metric({ label, value }: { label: string; value: number }) {
   );
 }
 
-function Board({ title, children }: { title: string; children: React.ReactNode }) {
+function Board({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="board">
       <h2>{title}</h2>
@@ -347,3 +424,6 @@ function Board({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
+function EmptyState({ text }: { text: string }) {
+  return <p className="empty">{text}</p>;
+}
