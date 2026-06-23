@@ -11,6 +11,14 @@ try {
 
 const appsApi = kc.makeApiClient(k8s.AppsV1Api);
 
+export class DemoDeploymentExistsError extends Error {
+  statusCode = 409;
+
+  constructor(readonly deploymentName: string) {
+    super(`App name is already in use. Choose a different app name, such as ${deploymentName}-${Date.now().toString().slice(-4)}.`);
+  }
+}
+
 export function deploymentName(appName: string) {
   return appName
     .toLowerCase()
@@ -48,60 +56,77 @@ export async function createDemoDeployment(input: { appName: string; image: stri
 
   const name = deploymentName(input.appName);
   const teamLabel = labelValue(input.teamName);
-  await appsApi.createNamespacedDeployment({
-    namespace: config.demoNamespace,
-    body: {
-      apiVersion: "apps/v1",
-      kind: "Deployment",
-      metadata: {
-        name,
-        labels: {
-          "app.kubernetes.io/name": name,
-          "app.kubernetes.io/part-of": "nopollops",
-          "nopollops.dev/team": teamLabel
-        },
-        annotations: {
-          "nopollops.dev/team-name": input.teamName
-        }
-      },
-      spec: {
-        replicas: 1,
-        selector: {
-          matchLabels: {
-            "app.kubernetes.io/name": name
+  try {
+    await appsApi.createNamespacedDeployment({
+      namespace: config.demoNamespace,
+      body: {
+        apiVersion: "apps/v1",
+        kind: "Deployment",
+        metadata: {
+          name,
+          labels: {
+            "app.kubernetes.io/name": name,
+            "app.kubernetes.io/part-of": "nopollops",
+            "nopollops.dev/team": teamLabel
+          },
+          annotations: {
+            "nopollops.dev/team-name": input.teamName
           }
         },
-        template: {
-          metadata: {
-            labels: {
+        spec: {
+          replicas: 1,
+          selector: {
+            matchLabels: {
               "app.kubernetes.io/name": name,
-              "app.kubernetes.io/part-of": "nopollops",
-              "nopollops.dev/team": teamLabel
-            },
-            annotations: {
-              "nopollops.dev/team-name": input.teamName
             }
           },
-          spec: {
-            containers: [
-              {
-                name: "app",
-                image: realImage(input.image),
-                imagePullPolicy: "IfNotPresent",
-                ports: [{ containerPort: 8080 }],
-                resources: {
-                  requests: { cpu: "20m", memory: "32Mi" },
-                  limits: { cpu: "100m", memory: "128Mi" }
-                }
+          template: {
+            metadata: {
+              labels: {
+                "app.kubernetes.io/name": name,
+                "app.kubernetes.io/part-of": "nopollops",
+                "nopollops.dev/team": teamLabel
+              },
+              annotations: {
+                "nopollops.dev/team-name": input.teamName
               }
-            ]
+            },
+            spec: {
+              containers: [
+                {
+                  name: "app",
+                  image: realImage(input.image),
+                  imagePullPolicy: "IfNotPresent",
+                  ports: [{ containerPort: 8080 }],
+                  resources: {
+                    requests: { cpu: "20m", memory: "32Mi" },
+                    limits: { cpu: "100m", memory: "128Mi" }
+                  }
+                }
+              ]
+            }
           }
         }
       }
+    });
+  } catch (error) {
+    if (isKubernetesAlreadyExists(error)) {
+      throw new DemoDeploymentExistsError(name);
     }
-  });
+    throw error;
+  }
 
   return { mode: "kubernetes" as const, name };
+}
+
+function isKubernetesAlreadyExists(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const record = error as Record<string, unknown>;
+  if (record.code === 409) return true;
+  const body = record.body;
+  if (!body || typeof body !== "object") return false;
+  const bodyRecord = body as Record<string, unknown>;
+  return bodyRecord.reason === "AlreadyExists" || bodyRecord.code === 409;
 }
 
 export async function patchDemoDeploymentImage(input: { deploymentName: string; image: string }) {

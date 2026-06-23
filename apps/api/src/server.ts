@@ -75,6 +75,19 @@ app.post("/api/submissions", async (request, response, next) => {
       return;
     }
 
+    const [existingSubmission] = await query<{ appName: string }>(
+      `select app_name as "appName"
+       from app_submissions
+       where lower(app_name) = lower($1)
+         and status <> 'deleted'
+       limit 1`,
+      [body.appName]
+    );
+    if (existingSubmission) {
+      response.status(409).json({ error: `App name "${body.appName}" is already used. Choose a unique app name for this deployment.` });
+      return;
+    }
+
     const [{ count }] = await query<{ count: string }>("select count(*)::text as count from app_submissions where status = 'kubernetes'");
     const shouldCreate = Number(count) < config.maxRealDeployments;
     const deployment = shouldCreate
@@ -285,9 +298,20 @@ app.post("/api/operator/reset", async (request, response, next) => {
 });
 
 app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
-  const message = error instanceof Error ? error.message : "unexpected error";
-  response.status(message === "unauthorized" ? 401 : 400).json({ error: message });
+  const statusCode = getStatusCode(error);
+  const message = error instanceof Error ? error.message : "Request failed. Please try again.";
+  response.status(statusCode).json({ error: message });
 });
+
+function getStatusCode(error: unknown) {
+  if (error instanceof z.ZodError) return 400;
+  if (error instanceof Error && error.message === "unauthorized") return 401;
+  if (error && typeof error === "object" && "statusCode" in error) {
+    const statusCode = (error as { statusCode?: unknown }).statusCode;
+    if (typeof statusCode === "number" && statusCode >= 400 && statusCode < 600) return statusCode;
+  }
+  return 400;
+}
 
 function requireOperator(value: string | string[] | undefined) {
   if (Array.isArray(value) || value !== config.operatorKey) {
