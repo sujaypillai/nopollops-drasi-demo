@@ -453,7 +453,7 @@ function DrasiEvidence({ state }: { state: DashboardState }) {
               <strong>{source.name}</strong>
               <span>{source.kind}</span>
               <small>{source.status}</small>
-              <code>{source.observes.join(" · ")}</code>
+              <ObservedList items={source.observes} />
             </article>
           ))}
         </div>
@@ -488,6 +488,16 @@ function DrasiEvidence({ state }: { state: DashboardState }) {
         </div>
       </div>
     </section>
+  );
+}
+
+function ObservedList({ items }: { items: string[] }) {
+  return (
+    <ul className="observed-list" aria-label="Observed resources">
+      {items.map((item) => (
+        <li key={item}>{item}</li>
+      ))}
+    </ul>
   );
 }
 
