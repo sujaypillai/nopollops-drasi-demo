@@ -207,20 +207,32 @@ function DeployPage({ participant, navigate }: { participant: Participant | null
   const [appName, setAppName] = useState("");
   const [image, setImage] = useState(imageOptions[0]);
   const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    const normalizedAppName = appName.trim();
+    setError(null);
+    setStatus(null);
     if (!participant) {
       navigate("/");
+      return;
+    }
+    if (!normalizedAppName) {
+      setError("App name is required before you can submit a deployment.");
       return;
     }
     const response = await fetch("/api/submissions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ participantId: participant.id, appName, image })
+      body: JSON.stringify({ participantId: participant.id, appName: normalizedAppName, image })
     });
     const result = await response.json();
-    setStatus(`${result.appName} submitted as ${result.status}`);
+    if (!response.ok) {
+      setError(result.error ?? "Deployment submission failed. Please try again.");
+      return;
+    }
+    setStatus(`${result.appName ?? normalizedAppName} submitted as ${result.status ?? "submitted"}`);
   }
 
   if (!participant) {
@@ -245,13 +257,23 @@ function DeployPage({ participant, navigate }: { participant: Participant | null
       </p>
       <form className="form wide" onSubmit={submit}>
         <label htmlFor="appName">App name</label>
-        <input id="appName" value={appName} onChange={(event) => setAppName(event.target.value)} placeholder="team-satay-api" />
+        <input
+          id="appName"
+          value={appName}
+          onChange={(event) => setAppName(event.target.value)}
+          placeholder="team-satay-api"
+          required
+          minLength={1}
+          maxLength={48}
+          aria-describedby={error ? "appNameError" : undefined}
+        />
         <label htmlFor="image">Container image</label>
         <select id="image" value={image} onChange={(event) => setImage(event.target.value)}>
           {imageOptions.map((option) => <option key={option}>{option}</option>)}
         </select>
         <button className="primary" type="submit" disabled={!appName.trim()}>Submit deployment</button>
       </form>
+      {error && <p id="appNameError" className="error">{error}</p>}
       {status && <p className="success">{status}</p>}
     </section>
   );

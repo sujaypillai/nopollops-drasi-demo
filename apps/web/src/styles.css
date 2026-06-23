@@ -273,6 +273,11 @@ select {
   font-weight: 700;
 }
 
+.error {
+  color: var(--signal);
+  font-weight: 700;
+}
+
 .vote-grid {
   display: grid;
   gap: 12px;
