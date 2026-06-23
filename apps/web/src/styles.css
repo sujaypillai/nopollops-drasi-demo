@@ -289,6 +289,16 @@ select {
   background: var(--lime);
 }
 
+.vote-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 24px;
+}
+
+.vote-actions .primary {
+  min-width: 180px;
+}
+
 .dashboard-hero {
   align-items: end;
   display: flex;

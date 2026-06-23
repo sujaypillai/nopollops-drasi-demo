@@ -282,7 +282,9 @@ function VotePage({ participant }: { participant: Participant | null }) {
           </button>
         ))}
       </div>
-      <button className="primary" onClick={vote} disabled={!participant}>Submit vote</button>
+      <div className="vote-actions">
+        <button className="primary" onClick={vote} disabled={!participant}>Submit vote</button>
+      </div>
       {status && <p className="success">{status}</p>}
     </section>
   );
