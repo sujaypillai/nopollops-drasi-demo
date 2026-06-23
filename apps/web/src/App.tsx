@@ -225,7 +225,7 @@ function DeployPage({ participant, navigate }: { participant: Participant | null
 
   if (!participant) {
     return (
-      <section className="panel">
+      <section className="panel audience-panel">
         <p className="eyebrow">Audience action</p>
         <h1>Deploy a cloud-native app</h1>
         <p className="lede">
@@ -237,9 +237,9 @@ function DeployPage({ participant, navigate }: { participant: Participant | null
   }
 
   return (
-    <section className="panel">
+    <section className="panel audience-panel">
       <p className="eyebrow">Audience action</p>
-      <h1>Deploy a cloud-native app</h1>
+      <h1 className="page-title">Deploy a cloud-native app</h1>
       <p className="lede">
         Checked in as <strong>{participant.displayName}</strong> ({participant.teamName}).
       </p>
@@ -272,9 +272,9 @@ function VotePage({ participant }: { participant: Participant | null }) {
   }
 
   return (
-    <section className="panel">
+    <section className="panel audience-panel">
       <p className="eyebrow">Human in the loop</p>
-      <h1>Choose the remediation</h1>
+      <h1 className="page-title">Choose the remediation</h1>
       <div className="vote-grid">
         {remediationOptions.map((option) => (
           <button className={selected === option ? "vote selected" : "vote"} key={option} onClick={() => setSelected(option)}>
@@ -515,7 +515,7 @@ function OperatorPage() {
   }
 
   return (
-    <section className="panel">
+    <section className="panel audience-panel">
       <p className="eyebrow">Operator console</p>
       <h1>Shape the incident live</h1>
       <div className="form wide">
