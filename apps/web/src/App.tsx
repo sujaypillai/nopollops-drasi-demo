@@ -253,7 +253,7 @@ function DeployPage({
       setError(result.error ?? "Deployment submission failed. Please try again.");
       return;
     }
-    setStatus(`${result.appName ?? normalizedAppName} submitted as ${result.status ?? "submitted"}`);
+    setStatus(`${result.appName ?? normalizedAppName} ${deploymentStatusCopy(result.status)}`);
   }
 
   if (!participant) {
@@ -299,6 +299,13 @@ function DeployPage({
       {status && <p className="success">{status}</p>}
     </section>
   );
+}
+
+function deploymentStatusCopy(status: string | undefined) {
+  if (status === "kubernetes") return "was deployed to the live Kubernetes cluster.";
+  if (status === "simulated") return "was added to the demo in simulation mode.";
+  if (status === "submitted") return "was submitted and is waiting for Drasi to evaluate it.";
+  return "was submitted successfully.";
 }
 
 function VotePage({ participant }: { participant: Participant | null }) {
