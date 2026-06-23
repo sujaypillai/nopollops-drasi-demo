@@ -87,6 +87,11 @@ export function App() {
     setRoute(path);
   };
 
+  const clearParticipant = () => {
+    localStorage.removeItem("nopollops.participant");
+    setParticipant(null);
+  };
+
   const page = useMemo(() => {
     if (route.startsWith("/dashboard")) return "dashboard";
     if (route.startsWith("/operator")) return "operator";
@@ -111,8 +116,8 @@ export function App() {
         </div>
       </nav>
 
-      {page === "join" && <JoinPage participant={participant} setParticipant={setParticipant} navigate={navigate} />}
-      {page === "deploy" && <DeployPage participant={participant} navigate={navigate} />}
+      {page === "join" && <JoinPage participant={participant} setParticipant={setParticipant} clearParticipant={clearParticipant} navigate={navigate} />}
+      {page === "deploy" && <DeployPage participant={participant} clearParticipant={clearParticipant} navigate={navigate} />}
       {page === "vote" && <VotePage participant={participant} />}
       {page === "dashboard" && <DashboardPage state={dashboard} />}
       {page === "operator" && <OperatorPage />}
@@ -123,10 +128,12 @@ export function App() {
 function JoinPage({
   participant,
   setParticipant,
+  clearParticipant,
   navigate
 }: {
   participant: Participant | null;
   setParticipant: (participant: Participant) => void;
+  clearParticipant: () => void;
   navigate: (path: string) => void;
 }) {
   const [displayName, setDisplayName] = useState("");
@@ -158,6 +165,7 @@ function JoinPage({
             <h2>{participant.displayName}</h2>
             <p className="team">{participant.teamName}</p>
             <button className="primary" onClick={() => navigate("/deploy")}>Deploy an app</button>
+            <button className="secondary compact-action" onClick={clearParticipant}>Join as someone else</button>
           </div>
         ) : (
           <form className="glass-card form" onSubmit={join}>
@@ -203,7 +211,15 @@ function QrCode({ value }: { value: string }) {
   );
 }
 
-function DeployPage({ participant, navigate }: { participant: Participant | null; navigate: (path: string) => void }) {
+function DeployPage({
+  participant,
+  clearParticipant,
+  navigate
+}: {
+  participant: Participant | null;
+  clearParticipant: () => void;
+  navigate: (path: string) => void;
+}) {
   const [appName, setAppName] = useState("");
   const [image, setImage] = useState(imageOptions[0]);
   const [status, setStatus] = useState<string | null>(null);
@@ -229,6 +245,11 @@ function DeployPage({ participant, navigate }: { participant: Participant | null
     });
     const result = await response.json();
     if (!response.ok) {
+      if (response.status === 404 && result.error === "participant not found") {
+        clearParticipant();
+        setError("Your previous check-in expired after the demo was reset. Please join again before deploying.");
+        return;
+      }
       setError(result.error ?? "Deployment submission failed. Please try again.");
       return;
     }
@@ -274,6 +295,7 @@ function DeployPage({ participant, navigate }: { participant: Participant | null
         <button className="primary" type="submit" disabled={!appName.trim()}>Submit deployment</button>
       </form>
       {error && <p id="appNameError" className="error">{error}</p>}
+      {error?.includes("join again") && <button className="secondary compact-action" onClick={() => navigate("/")}>Rejoin demo</button>}
       {status && <p className="success">{status}</p>}
     </section>
   );
