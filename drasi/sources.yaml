@@ -6,8 +6,14 @@ spec:
   properties:
     host: ${POSTGRES_HOST}
     port: 5432
-    user: ${POSTGRES_USER}
-    password: ${POSTGRES_PASSWORD}
+    user:
+      kind: Secret
+      name: pg-creds
+      key: user
+    password:
+      kind: Secret
+      name: pg-creds
+      key: password
     database: nopollops
     ssl: true
     tables:
@@ -22,7 +28,8 @@ name: nopollops-kubernetes
 spec:
   kind: Kubernetes
   properties:
-    kubeConfigSecret: k8s-context
-    namespaces:
-      - nopollops-demo
+    kubeConfig:
+      kind: Secret
+      name: k8s-context
+      key: context
 

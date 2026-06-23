@@ -9,23 +9,27 @@ spec:
         nodes:
           - sourceLabel: app_submissions
           - sourceLabel: risky_images
-      - id: nopollops-kubernetes
-        nodes:
-          - sourceLabel: Pod
+    joins:
+      - id: HAS_RISK
+        keys:
+          - label: app_submissions
+            property: image
+          - label: risky_images
+            property: image
   query: >
     MATCH
-      (submission:app_submissions),
-      (risk:risky_images {active: true}),
-      (pod:Pod)
-    WHERE submission.image = risk.image
-      AND pod.metadata.namespace = submission.namespace
+      (submission:app_submissions)-[:HAS_RISK]->(risk:risky_images)
+    WHERE
+      risk.active = 't'
+      AND submission.status <> 'deleted'
     RETURN
+      submission.id AS submissionId,
       submission.app_name AS appName,
       submission.team_name AS teamName,
+      submission.namespace AS namespace,
+      submission.deployment_name AS deploymentName,
       submission.image AS image,
-      pod.metadata.name AS podName,
-      pod.metadata.namespace AS namespace,
+      submission.status AS status,
       risk.severity AS severity,
       risk.reason AS reason,
       risk.mitigation AS mitigation
-

@@ -32,4 +32,29 @@ spec:
                 name: nopollops-web
                 port:
                   number: 80
+    # Catch-all rule (no host) so the load balancer IP works directly
+    # without requiring the nip.io Host header.
+    - http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: nopollops-api
+                port:
+                  number: 8080
+          - path: /events
+            pathType: Prefix
+            backend:
+              service:
+                name: nopollops-api
+                port:
+                  number: 8080
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nopollops-web
+                port:
+                  number: 80
 

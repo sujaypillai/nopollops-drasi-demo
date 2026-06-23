@@ -55,9 +55,9 @@ resource "azurerm_kubernetes_cluster" "main" {
     auto_scaling_enabled         = true
     min_count                    = 2
     max_count                    = 4
-    os_disk_type                 = "Ephemeral"
+    os_disk_type                 = "Managed"
     only_critical_addons_enabled = true
-    zones                        = ["1", "2", "3"]
+    zones                        = ["2", "3"]
   }
 
   identity {
@@ -93,8 +93,8 @@ resource "azurerm_kubernetes_cluster_node_pool" "user" {
   auto_scaling_enabled  = true
   min_count             = 2
   max_count             = 6
-  os_disk_type          = "Ephemeral"
-  zones                 = ["1", "2", "3"]
+  os_disk_type          = "Managed"
+  zones                 = ["2", "3"]
 }
 
 resource "azurerm_role_assignment" "aks_acr_pull" {

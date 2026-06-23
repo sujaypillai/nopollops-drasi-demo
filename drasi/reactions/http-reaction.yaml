@@ -3,11 +3,119 @@ kind: Reaction
 name: nopollops-http
 spec:
   kind: Http
+  properties:
+    baseUrl: "http://nopollops-api.nopollops-system.svc.cluster.local:8080"
   queries:
-    risky-running-workloads:
-      url: http://nopollops-api.nopollops-system.svc.cluster.local:8080/api/drasi/reactions
-      method: POST
-    affected-teams:
-      url: http://nopollops-api.nopollops-system.svc.cluster.local:8080/api/drasi/reactions
-      method: POST
-
+    risky-running-workloads: >
+      added:
+        url: "/api/drasi/reactions"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body: |
+          {
+            "queryName": "risky-running-workloads",
+            "changeType": "added",
+            "summary": "Risky workload detected: {{after.appName}} ({{after.severity}})",
+            "payload": {
+              "submissionId": "{{after.submissionId}}",
+              "appName": "{{after.appName}}",
+              "teamName": "{{after.teamName}}",
+              "namespace": "{{after.namespace}}",
+              "deploymentName": "{{after.deploymentName}}",
+              "image": "{{after.image}}",
+              "status": "{{after.status}}",
+              "severity": "{{after.severity}}",
+              "reason": "{{after.reason}}",
+              "mitigation": "{{after.mitigation}}"
+            }
+          }
+      updated:
+        url: "/api/drasi/reactions"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body: |
+          {
+            "queryName": "risky-running-workloads",
+            "changeType": "updated",
+            "summary": "Risky workload updated: {{after.appName}} ({{after.severity}})",
+            "payload": {
+              "submissionId": "{{after.submissionId}}",
+              "appName": "{{after.appName}}",
+              "teamName": "{{after.teamName}}",
+              "namespace": "{{after.namespace}}",
+              "deploymentName": "{{after.deploymentName}}",
+              "image": "{{after.image}}",
+              "status": "{{after.status}}",
+              "severity": "{{after.severity}}",
+              "reason": "{{after.reason}}",
+              "mitigation": "{{after.mitigation}}"
+            }
+          }
+      deleted:
+        url: "/api/drasi/reactions"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body: |
+          {
+            "queryName": "risky-running-workloads",
+            "changeType": "deleted",
+            "summary": "Risky workload resolved: {{before.appName}}",
+            "payload": {
+              "submissionId": "{{before.submissionId}}",
+              "appName": "{{before.appName}}",
+              "teamName": "{{before.teamName}}",
+              "namespace": "{{before.namespace}}",
+              "deploymentName": "{{before.deploymentName}}",
+              "image": "{{before.image}}",
+              "status": "{{before.status}}"
+            }
+          }
+    affected-teams: >
+      added:
+        url: "/api/drasi/reactions"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body: |
+          {
+            "queryName": "affected-teams",
+            "changeType": "added",
+            "summary": "Team affected: {{after.teamName}} ({{after.riskyWorkloadCount}} workloads)",
+            "payload": {
+              "teamName": "{{after.teamName}}",
+              "riskyWorkloadCount": {{after.riskyWorkloadCount}}
+            }
+          }
+      updated:
+        url: "/api/drasi/reactions"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body: |
+          {
+            "queryName": "affected-teams",
+            "changeType": "updated",
+            "summary": "Team risk updated: {{after.teamName}} ({{after.riskyWorkloadCount}} workloads)",
+            "payload": {
+              "teamName": "{{after.teamName}}",
+              "riskyWorkloadCount": {{after.riskyWorkloadCount}}
+            }
+          }
+      deleted:
+        url: "/api/drasi/reactions"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body: |
+          {
+            "queryName": "affected-teams",
+            "changeType": "deleted",
+            "summary": "Team risk cleared: {{before.teamName}}",
+            "payload": {
+              "teamName": "{{before.teamName}}",
+              "riskyWorkloadCount": {{before.riskyWorkloadCount}}
+            }
+          }

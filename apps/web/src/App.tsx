@@ -14,6 +14,20 @@ type DashboardState = {
   activeRisks: Array<{ image: string; severity: string; reason: string; mitigation: string }>;
   votes: Record<string, number>;
   reactions: Array<{ id: string; changeType: string; queryName: string; summary: string; createdAt: string }>;
+  drasi: {
+    sources: Array<{ name: string; kind: string; observes: string[]; status: string }>;
+    queries: Array<{
+      name: string;
+      purpose: string;
+      resultCount: number;
+      added: number;
+      updated: number;
+      deleted: number;
+      totalChanges: number;
+      lastSeenAt: string | null;
+    }>;
+    reaction: { name: string; kind: string; deliveredEvents: number; lastSeenAt: string | null };
+  };
 };
 
 const imageOptions = [
@@ -33,7 +47,12 @@ const emptyDashboard: DashboardState = {
   affectedTeams: [],
   activeRisks: [],
   votes: {},
-  reactions: []
+  reactions: [],
+  drasi: {
+    sources: [],
+    queries: [],
+    reaction: { name: "nopollops-http", kind: "HTTP Reaction", deliveredEvents: 0, lastSeenAt: null }
+  }
 };
 
 export function App() {
@@ -155,11 +174,32 @@ function JoinPage({
         )}
       </div>
       <div className="poster">
-        <div className="qr">QR</div>
+        <QrCode value={typeof window !== "undefined" ? window.location.origin + "/" : "/"} />
         <p>Audience source of change</p>
         <span>PostgreSQL + Kubernetes → Drasi → Live reactions</span>
       </div>
     </section>
+  );
+}
+
+function QrCode({ value }: { value: string }) {
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    import("qrcode")
+      .then((m) => m.toDataURL(value, { margin: 1, width: 220, color: { dark: "#0b1020", light: "#ffffff" } }))
+      .then((url) => {
+        if (!cancelled) setDataUrl(url);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [value]);
+  return (
+    <div className="qr" aria-label={`QR code linking to ${value}`}>
+      {dataUrl ? <img src={dataUrl} alt={`QR code for ${value}`} /> : "QR"}
+    </div>
   );
 }
 
@@ -183,10 +223,26 @@ function DeployPage({ participant, navigate }: { participant: Participant | null
     setStatus(`${result.appName} submitted as ${result.status}`);
   }
 
+  if (!participant) {
+    return (
+      <section className="panel">
+        <p className="eyebrow">Audience action</p>
+        <h1>Deploy a cloud-native app</h1>
+        <p className="lede">
+          You need to check in before deploying. Pick a display name on the Join page and you'll be redirected back here automatically.
+        </p>
+        <button className="primary" onClick={() => navigate("/")}>Go to Join page</button>
+      </section>
+    );
+  }
+
   return (
     <section className="panel">
       <p className="eyebrow">Audience action</p>
       <h1>Deploy a cloud-native app</h1>
+      <p className="lede">
+        Checked in as <strong>{participant.displayName}</strong> ({participant.teamName}).
+      </p>
       <form className="form wide" onSubmit={submit}>
         <label htmlFor="appName">App name</label>
         <input id="appName" value={appName} onChange={(event) => setAppName(event.target.value)} placeholder="team-satay-api" />
@@ -194,7 +250,7 @@ function DeployPage({ participant, navigate }: { participant: Participant | null
         <select id="image" value={image} onChange={(event) => setImage(event.target.value)}>
           {imageOptions.map((option) => <option key={option}>{option}</option>)}
         </select>
-        <button className="primary" disabled={!appName.trim()}>Submit deployment</button>
+        <button className="primary" type="submit" disabled={!appName.trim()}>Submit deployment</button>
       </form>
       {status && <p className="success">{status}</p>}
     </section>
@@ -253,6 +309,7 @@ function DashboardPage({ state }: { state: DashboardState }) {
         <span>Continuous query:</span>
         <code>MATCH running pods + app submissions + active risky images RETURN affected workloads</code>
       </div>
+      <DrasiEvidence state={state} />
       <div className="dashboard-grid">
         <Board title="Risky workloads">
           {state.riskyWorkloads.length === 0 && <EmptyState text="No risky workloads detected. Create change to wake up the room." />}
@@ -319,6 +376,81 @@ function DashboardPage({ state }: { state: DashboardState }) {
       </div>
     </section>
   );
+}
+
+function DrasiEvidence({ state }: { state: DashboardState }) {
+  return (
+    <section className="drasi-evidence">
+      <div className="evidence-header">
+        <div>
+          <p className="eyebrow">Drasi data plane evidence</p>
+          <h2>Sources → Continuous Queries → Reaction</h2>
+        </div>
+        <div className="reaction-chip">
+          <span>{state.drasi.reaction.kind}</span>
+          <strong>{state.drasi.reaction.deliveredEvents}</strong>
+          <small>delivered result-change events</small>
+        </div>
+      </div>
+      <div className="evidence-flow">
+        <div className="evidence-column">
+          <h3>Sources</h3>
+          {state.drasi.sources.map((source) => (
+            <article className="drasi-card" key={source.name}>
+              <strong>{source.name}</strong>
+              <span>{source.kind}</span>
+              <small>{source.status}</small>
+              <code>{source.observes.join(" · ")}</code>
+            </article>
+          ))}
+        </div>
+        <div className="flow-arrow">⟶</div>
+        <div className="evidence-column queries">
+          <h3>Continuous queries</h3>
+          {state.drasi.queries.map((query) => (
+            <article className="drasi-card query-card" key={query.name}>
+              <strong>{query.name}</strong>
+              <span>{query.purpose}</span>
+              <div className="delta-grid">
+                <Delta label="results" value={query.resultCount} />
+                <Delta label="added" value={query.added} />
+                <Delta label="updated" value={query.updated} />
+                <Delta label="deleted" value={query.deleted} />
+              </div>
+              <small>{query.lastSeenAt ? `last change ${formatTime(query.lastSeenAt)}` : "waiting for result changes"}</small>
+            </article>
+          ))}
+        </div>
+        <div className="flow-arrow">⟶</div>
+        <div className="evidence-column">
+          <h3>Reaction</h3>
+          <article className="drasi-card reaction-card">
+            <strong>{state.drasi.reaction.name}</strong>
+            <span>{state.drasi.reaction.kind}</span>
+            <div className="delta-grid single">
+              <Delta label="events" value={state.drasi.reaction.deliveredEvents} />
+            </div>
+            <small>{state.drasi.reaction.lastSeenAt ? `last delivery ${formatTime(state.drasi.reaction.lastSeenAt)}` : "no deliveries yet"}</small>
+          </article>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Delta({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="delta">
+      <strong>{value}</strong>
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function formatTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
 function OperatorPage() {

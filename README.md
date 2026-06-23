@@ -91,3 +91,19 @@ scripts/apply-drasi.sh
 ```
 
 See `docs/demo-runbook.md` for the live conference flow.
+
+### Live deployment
+
+The reference deployment is reachable at **http://20.212.124.116.nip.io** (ingress is the AKS Web App Routing nginx LB; FQDN auto-resolves via nip.io). The Drasi reaction → API → dashboard loop is verified end-to-end: an INSERT into `app_submissions` whose `image` matches an active `risky_images` row produces a `risky-running-workloads`/`affected-teams` continuous-query result that the HTTP reaction posts to `/api/drasi/reactions`, which lands in `reaction_events` and shows up in the dashboard.
+
+### Gotchas worth remembering
+
+- **southeastasia** does not support availability zone `1`; Terraform uses zones `["2","3"]`.
+- `Standard_D4s_v5` does **not** support Ephemeral OS disk; node pools use `os_disk_type = "Managed"`. Switch to `Standard_D4ds_v5` if you want ephemeral.
+- Azure PostgreSQL Flexible Server requires explicit allow-list for extensions: `az postgres flexible-server parameter set ... azure.extensions=UUID-OSSP`. `wal_level=LOGICAL` requires a server restart; the admin user needs `ALTER ROLE … WITH REPLICATION` for Drasi's PG source.
+- Drasi 0.10 does **not** automatically install default Source/Reaction providers; apply them from `drasi-platform/0.10.0/cli/installers/resources/default-{source,reaction}-providers.yaml`.
+- Drasi's PostgreSQL source emits Debezium `boolean` columns as strings `"t"`/`"f"` — Cypher queries must compare with `r.active = 't'`, not `r.active = true`.
+- Drasi continuous queries **cannot** join across labels via a cartesian `MATCH`; declare an explicit `sources.joins` block and pattern with the synthetic edge (`(a)-[:JOIN_ID]->(b)`).
+- The HTTP reaction uses plain Handlebars **with no custom helpers** — there is no `json` helper. Render the JSON body field-by-field rather than `{{json after}}`.
+- For UPDATE/DELETE events to carry the full row (needed for many continuous queries), set `REPLICA IDENTITY FULL` on the published tables.
+- The Kubernetes source needs an in-cluster kubeconfig (server `https://kubernetes.default.svc` + ServiceAccount token + CA). `az aks get-credentials` style kubeconfigs use exec auth and won't work from inside a pod. `scripts/apply-drasi.sh` builds this automatically.

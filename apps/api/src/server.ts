@@ -19,6 +19,10 @@ app.get("/healthz", (_request, response) => {
   response.json({ ok: true });
 });
 
+app.get("/api/healthz", (_request, response) => {
+  response.json({ ok: true });
+});
+
 app.get("/events", async (_request, response) => {
   response.setHeader("Content-Type", "text/event-stream");
   response.setHeader("Cache-Control", "no-cache");

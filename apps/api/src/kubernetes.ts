@@ -19,12 +19,35 @@ export function deploymentName(appName: string) {
     .slice(0, 48);
 }
 
+function labelValue(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, "-")
+    .replace(/^[-._]+|[-._]+$/g, "")
+    .slice(0, 63) || "unknown";
+}
+
+const imageTranslations: Record<string, string> = {
+  "ghcr.io/nopollops/openssl-demo:vulnerable": "nginxinc/nginx-unprivileged:1.20-alpine",
+  "ghcr.io/nopollops/openssl-demo:patched":    "nginxinc/nginx-unprivileged:1.27-alpine",
+  "ghcr.io/nopollops/payment-api:legacy":      "nginxinc/nginx-unprivileged:1.21-alpine",
+  "ghcr.io/nopollops/payment-api:v2":          "nginxinc/nginx-unprivileged:1.27-alpine",
+  "ghcr.io/nopollops/payment-api:patched":     "nginxinc/nginx-unprivileged:1.27-alpine",
+  "ghcr.io/nopollops/frontend:stable":         "nginxinc/nginx-unprivileged:1.25-alpine",
+  "ghcr.io/nopollops/frontend:patched":        "nginxinc/nginx-unprivileged:1.27-alpine"
+};
+
+function realImage(image: string) {
+  return imageTranslations[image] ?? "nginxinc/nginx-unprivileged:1.27-alpine";
+}
+
 export async function createDemoDeployment(input: { appName: string; image: string; teamName: string }) {
   if (!config.kubernetesEnabled || !kc.getCurrentCluster()) {
     return { mode: "simulated" as const, name: deploymentName(input.appName) };
   }
 
   const name = deploymentName(input.appName);
+  const teamLabel = labelValue(input.teamName);
   await appsApi.createNamespacedDeployment({
     namespace: config.demoNamespace,
     body: {
@@ -35,7 +58,10 @@ export async function createDemoDeployment(input: { appName: string; image: stri
         labels: {
           "app.kubernetes.io/name": name,
           "app.kubernetes.io/part-of": "nopollops",
-          "nopollops.dev/team": input.teamName
+          "nopollops.dev/team": teamLabel
+        },
+        annotations: {
+          "nopollops.dev/team-name": input.teamName
         }
       },
       spec: {
@@ -50,15 +76,19 @@ export async function createDemoDeployment(input: { appName: string; image: stri
             labels: {
               "app.kubernetes.io/name": name,
               "app.kubernetes.io/part-of": "nopollops",
-              "nopollops.dev/team": input.teamName
+              "nopollops.dev/team": teamLabel
+            },
+            annotations: {
+              "nopollops.dev/team-name": input.teamName
             }
           },
           spec: {
             containers: [
               {
                 name: "app",
-                image: input.image,
+                image: realImage(input.image),
                 imagePullPolicy: "IfNotPresent",
+                ports: [{ containerPort: 8080 }],
                 resources: {
                   requests: { cpu: "20m", memory: "32Mi" },
                   limits: { cpu: "100m", memory: "128Mi" }
@@ -86,7 +116,7 @@ export async function patchDemoDeploymentImage(input: { deploymentName: string; 
       {
         op: "replace",
         path: "/spec/template/spec/containers/0/image",
-        value: input.image
+        value: realImage(input.image)
       }
     ]
   });
