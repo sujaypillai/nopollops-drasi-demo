@@ -11,6 +11,22 @@ const app = express();
 
 const teams = ["Team Satay", "Team Nasi Lemak", "Team Roti Canai", "Team Teh Tarik", "Team Durian", "Team Laksa"];
 const demoNames = ["satay-api", "laksa-ledger", "durian-gateway", "teh-tarik-worker", "roti-router", "rendang-risk"];
+const defaultRiskyImages = [
+  {
+    image: "ghcr.io/nopollops/openssl-demo:vulnerable",
+    severity: "Critical",
+    reason: "Known vulnerable OpenSSL demo image",
+    mitigation: "Upgrade to ghcr.io/nopollops/openssl-demo:patched",
+    active: true
+  },
+  {
+    image: "ghcr.io/nopollops/payment-api:legacy",
+    severity: "High",
+    reason: "Legacy payment image flagged by the live risk catalog",
+    mitigation: "Upgrade to ghcr.io/nopollops/payment-api:v2",
+    active: false
+  }
+];
 
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
@@ -296,12 +312,29 @@ app.post("/api/operator/reset", async (request, response, next) => {
     await query("delete from app_submissions");
     await query("delete from risky_images");
     await query("delete from participants");
+    await seedDefaultRiskyImages();
     await publishDashboard();
     response.status(202).json({ ok: true, workloadCleanup: cleanup });
   } catch (error) {
     next(error);
   }
 });
+
+async function seedDefaultRiskyImages() {
+  for (const risk of defaultRiskyImages) {
+    await query(
+      `insert into risky_images (id, image, image_tag, severity, reason, mitigation, active)
+       values ($1, $2, split_part($2, ':', 2), $3, $4, $5, $6)
+       on conflict (image) do update
+       set severity = excluded.severity,
+           reason = excluded.reason,
+           mitigation = excluded.mitigation,
+           active = excluded.active,
+           resolved_at = null`,
+      [randomUUID(), risk.image, risk.severity, risk.reason, risk.mitigation, risk.active]
+    );
+  }
+}
 
 app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
   const statusCode = getStatusCode(error);
