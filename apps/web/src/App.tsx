@@ -606,7 +606,13 @@ function OperatorPage() {
       method: "POST",
       headers: { "x-operator-key": operatorKey }
     });
-    setMessage(response.ok ? "Demo reset requested" : "Reset failed");
+    const result = await response.json().catch(() => ({}));
+    if (response.ok) {
+      const deleted = result.workloadCleanup?.deleted;
+      setMessage(typeof deleted === "number" ? `Demo reset complete. Removed ${deleted} Kubernetes workload(s).` : "Demo reset complete.");
+      return;
+    }
+    setMessage(result.error ?? "Reset failed");
   }
 
   return (

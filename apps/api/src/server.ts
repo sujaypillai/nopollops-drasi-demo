@@ -5,7 +5,7 @@ import { z } from "zod";
 import { config } from "./config.js";
 import { addClient } from "./events.js";
 import { getDashboardState, publishDashboard, query } from "./db.js";
-import { createDemoDeployment, deleteDemoDeployment, patchDemoDeploymentImage } from "./kubernetes.js";
+import { createDemoDeployment, deleteAllDemoDeployments, deleteDemoDeployment, patchDemoDeploymentImage } from "./kubernetes.js";
 
 const app = express();
 
@@ -289,9 +289,15 @@ app.post("/api/operator/seed", async (request, response, next) => {
 app.post("/api/operator/reset", async (request, response, next) => {
   try {
     requireOperator(request.headers["x-operator-key"]);
-    await query("truncate remediation_votes, reaction_events, app_submissions, risky_images, participants restart identity");
+    await query("set statement_timeout = '10s'");
+    const cleanup = await deleteAllDemoDeployments();
+    await query("delete from remediation_votes");
+    await query("delete from reaction_events");
+    await query("delete from app_submissions");
+    await query("delete from risky_images");
+    await query("delete from participants");
     await publishDashboard();
-    response.status(202).json({ ok: true });
+    response.status(202).json({ ok: true, workloadCleanup: cleanup });
   } catch (error) {
     next(error);
   }

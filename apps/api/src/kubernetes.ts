@@ -161,3 +161,26 @@ export async function deleteDemoDeployment(input: { deploymentName: string }) {
 
   return { mode: "kubernetes" as const };
 }
+
+export async function deleteAllDemoDeployments() {
+  if (!config.kubernetesEnabled || !kc.getCurrentCluster()) {
+    return { mode: "simulated" as const, deleted: 0 };
+  }
+
+  const deployments = await appsApi.listNamespacedDeployment({
+    namespace: config.demoNamespace,
+    labelSelector: "app.kubernetes.io/part-of=nopollops"
+  });
+  let deleted = 0;
+  for (const deployment of deployments.items) {
+    const name = deployment.metadata?.name;
+    if (!name) continue;
+    await appsApi.deleteNamespacedDeployment({
+      name,
+      namespace: config.demoNamespace
+    });
+    deleted += 1;
+  }
+
+  return { mode: "kubernetes" as const, deleted };
+}
