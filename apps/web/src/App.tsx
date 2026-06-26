@@ -62,6 +62,7 @@ export function App() {
     return raw ? JSON.parse(raw) : null;
   });
   const [dashboard, setDashboard] = useState<DashboardState>(emptyDashboard);
+  const [liveStatus, setLiveStatus] = useState<"connecting" | "live" | "polling">("connecting");
 
   useEffect(() => {
     const onPop = () => setRoute(window.location.pathname);
@@ -70,16 +71,44 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/dashboard")
-      .then((res) => res.json())
-      .then(setDashboard)
-      .catch(() => undefined);
+    let cancelled = false;
+    const refreshDashboard = async () => {
+      const response = await fetch("/api/dashboard", { cache: "no-store" });
+      if (!response.ok) return;
+      const nextDashboard = await response.json();
+      if (!cancelled) setDashboard(nextDashboard);
+    };
+
+    refreshDashboard().catch(() => setLiveStatus("polling"));
 
     const events = new EventSource("/events");
+    events.onopen = () => setLiveStatus("live");
+    events.onerror = () => {
+      setLiveStatus("polling");
+      refreshDashboard().catch(() => undefined);
+    };
     events.addEventListener("dashboard", (event) => {
       setDashboard(JSON.parse((event as MessageEvent).data));
+      setLiveStatus("live");
     });
-    return () => events.close();
+
+    const refreshInterval = window.setInterval(() => {
+      refreshDashboard().catch(() => setLiveStatus("polling"));
+    }, 5000);
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        refreshDashboard().catch(() => undefined);
+      }
+    };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      cancelled = true;
+      events.close();
+      window.clearInterval(refreshInterval);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
   }, []);
 
   const navigate = (path: string) => {
@@ -119,7 +148,7 @@ export function App() {
       {page === "join" && <JoinPage participant={participant} setParticipant={setParticipant} clearParticipant={clearParticipant} navigate={navigate} />}
       {page === "deploy" && <DeployPage participant={participant} clearParticipant={clearParticipant} navigate={navigate} />}
       {page === "vote" && <VotePage participant={participant} />}
-      {page === "dashboard" && <DashboardPage state={dashboard} />}
+      {page === "dashboard" && <DashboardPage state={dashboard} liveStatus={liveStatus} />}
       {page === "operator" && <OperatorPage />}
     </main>
   );
@@ -341,7 +370,7 @@ function VotePage({ participant }: { participant: Participant | null }) {
   );
 }
 
-function DashboardPage({ state }: { state: DashboardState }) {
+function DashboardPage({ state, liveStatus }: { state: DashboardState; liveStatus: "connecting" | "live" | "polling" }) {
   const totalVotes = Object.values(state.votes).reduce((sum, count) => sum + count, 0);
 
   return (
@@ -350,6 +379,9 @@ function DashboardPage({ state }: { state: DashboardState }) {
         <div>
           <p className="eyebrow">Presenter dashboard</p>
           <h1>Continuous Query Control Room</h1>
+          <p className={`live-status ${liveStatus}`}>
+            {liveStatus === "live" ? "Live stream connected" : liveStatus === "polling" ? "Live stream fallback: polling every 5 seconds" : "Connecting live stream"}
+          </p>
         </div>
         <div className="metrics">
           <Metric label="Participants" value={state.participants} />
